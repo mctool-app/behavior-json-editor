@@ -1,0 +1,1097 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minecraft Entity Editor</title>
+    <style>
+        :root {
+            --bg-dark: #1e1e1e;
+            --bg-darker: #121212;
+            --bg-sidebar: #252526;
+            --bg-hover: #2a2d2e;
+            --border-color: #464647;
+            --text-primary: #d4d4d4;
+            --text-secondary: #858585;
+            --accent: #007acc;
+            --accent-hover: #0e639c;
+            --success: #4ec9b0;
+            --warning: #ce9178;
+            --error: #f48771;
+            --json-key: #9cdcfe;
+            --json-string: #ce9178;
+            --json-number: #b5cea8;
+            --json-boolean: #569cd6;
+            --json-null: #569cd6;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-darker);
+            color: var(--text-primary);
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .container {
+            display: flex;
+            height: 100vh;
+        }
+
+        /* 左側サイドバー */
+        .sidebar {
+            width: 350px;
+            background-color: var(--bg-sidebar);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .drop-area {
+            height: 120px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .drop-area:hover {
+            background-color: var(--bg-hover);
+        }
+
+        .drop-area i {
+            font-size: 32px;
+            margin-bottom: 10px;
+            color: var(--accent);
+        }
+
+        .drop-area p {
+            text-align: center;
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .drop-area .filename {
+            margin-top: 5px;
+            font-size: 12px;
+            color: var(--success);
+            word-break: break-all;
+            text-align: center;
+        }
+
+        .params {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .param-group {
+            margin-bottom: 25px;
+        }
+
+        .param-group h3 {
+            font-size: 16px;
+            margin-bottom: 15px;
+            color: var(--text-primary);
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 5px;
+        }
+
+        .param-item {
+            margin-bottom: 15px;
+        }
+
+        .param-item label {
+            display: block;
+            font-size: 14px;
+            margin-bottom: 5px;
+            color: var(--text-secondary);
+        }
+
+        .number-input {
+            display: flex;
+            align-items: center;
+        }
+
+        .number-input input {
+            flex: 1;
+            background-color: var(--bg-dark);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 8px 12px;
+            font-size: 16px;
+            border-radius: 3px 0 0 3px;
+        }
+
+        .number-input input:disabled {
+            background-color: #2a2d2e;
+            color: #666;
+            cursor: not-allowed;
+        }
+
+        .number-buttons {
+            display: flex;
+            flex-direction: column;
+            border: 1px solid var(--border-color);
+            border-left: none;
+            border-radius: 0 3px 3px 0;
+        }
+
+        .number-btn {
+            width: 30px;
+            height: 20px;
+            background-color: var(--bg-dark);
+            border: none;
+            color: var(--text-primary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+        }
+
+        .number-btn:hover {
+            background-color: var(--bg-hover);
+        }
+
+        .number-btn:first-child {
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .number-btn:disabled {
+            background-color: #2a2d2e;
+            color: #666;
+            cursor: not-allowed;
+        }
+
+        /* 右側エディター */
+        .editor-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .editor-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 20px;
+            background-color: var(--bg-dark);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .editor-header h2 {
+            font-size: 18px;
+            font-weight: normal;
+        }
+
+        .editor-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .editor-btn {
+            background-color: var(--accent);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            transition: background-color 0.2s;
+        }
+
+        .editor-btn:hover {
+            background-color: var(--accent-hover);
+        }
+
+        .editor-btn.edit {
+            background-color: transparent;
+            border: 1px solid var(--border-color);
+        }
+
+        .editor-btn.edit:hover {
+            background-color: var(--bg-hover);
+        }
+
+        .editor-btn.copy {
+            background-color: #388a34;
+        }
+
+        .editor-btn.copy:hover {
+            background-color: #2d6e2a;
+        }
+
+        .editor-content {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+            position: relative;
+        }
+
+        #codeViewer, #codeEditor {
+            flex: 1;
+            font-size: 18px;
+            line-height: 1.5;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            padding: 20px;
+            overflow-y: auto;
+            white-space: pre;
+            tab-size: 4;
+        }
+
+        #codeViewer {
+            background-color: var(--bg-dark);
+        }
+
+        #codeEditor {
+            background-color: var(--bg-dark);
+            color: var(--text-primary);
+            border: none;
+            outline: none;
+            resize: none;
+        }
+
+        /* 行番号 */
+        .line-numbers {
+            width: 50px;
+            background-color: var(--bg-sidebar);
+            color: var(--text-secondary);
+            text-align: right;
+            padding: 20px 10px;
+            overflow-y: hidden;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 18px;
+            line-height: 1.5;
+            user-select: none;
+        }
+
+        /* JSONシンタックスハイライト */
+        .json-key { color: var(--json-key); }
+        .json-string { color: var(--json-string); }
+        .json-number { color: var(--json-number); }
+        .json-boolean { color: var(--json-boolean); }
+        .json-null { color: var(--json-null); }
+        .json-punctuation { color: var(--text-primary); }
+
+        /* 変更行のハイライト */
+        .line-modified {
+            background-color: rgba(255, 255, 0, 0.1);
+            animation: highlight-fade 2s ease-out;
+        }
+
+        @keyframes highlight-fade {
+            0% { background-color: rgba(255, 255, 0, 0.3); }
+            100% { background-color: rgba(255, 255, 0, 0.1); }
+        }
+
+        /* ステータス表示 */
+        .status {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background-color: var(--accent);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 3px;
+            display: none;
+            z-index: 1000;
+        }
+
+        /* 確認モーダル */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            display: none;
+        }
+
+        .modal {
+            background-color: var(--bg-sidebar);
+            border-radius: 5px;
+            padding: 30px;
+            max-width: 500px;
+            width: 90%;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+        }
+
+        .modal h3 {
+            margin-bottom: 15px;
+            color: var(--text-primary);
+            font-size: 20px;
+        }
+
+        .modal p {
+            margin-bottom: 25px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+
+        .modal-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .modal-btn.cancel {
+            background-color: var(--bg-dark);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+        }
+
+        .modal-btn.cancel:hover {
+            background-color: var(--bg-hover);
+        }
+
+        .modal-btn.confirm {
+            background-color: #c42b1c;
+            color: white;
+        }
+
+        .modal-btn.confirm:hover {
+            background-color: #a02519;
+        }
+
+        /* スクロールバー */
+        ::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--bg-darker);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 左側サイドバー -->
+        <div class="sidebar">
+            <div class="drop-area" id="dropArea">
+                <i>📁</i>
+                <p>JSONファイルをドラッグ&ドロップ</p>
+                <p>またはクリックしてファイルを選択</p>
+                <div class="filename" id="fileName"></div>
+                <input type="file" id="fileInput" accept=".json" style="display: none;">
+            </div>
+            
+            <div class="params">
+                <div class="param-group">
+                    <h3>エンティティパラメータ</h3>
+                    
+                    <div class="param-item">
+                        <label for="health">体力</label>
+                        <div class="number-input">
+                            <input type="number" id="health" min="1" step="1">
+                            <div class="number-buttons">
+                                <button class="number-btn" data-for="health" data-dir="up">▲</button>
+                                <button class="number-btn" data-for="health" data-dir="down">▼</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="param-item">
+                        <label for="attack">攻撃のダメージ数</label>
+                        <div class="number-input">
+                            <input type="number" id="attack" min="0" step="1" disabled>
+                            <div class="number-buttons">
+                                <button class="number-btn" data-for="attack" data-dir="up" disabled>▲</button>
+                                <button class="number-btn" data-for="attack" data-dir="down" disabled>▼</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="param-item">
+                        <label for="targetRadius">敵対する距離</label>
+                        <div class="number-input">
+                            <input type="number" id="targetRadius" min="1" step="1" disabled>
+                            <div class="number-buttons">
+                                <button class="number-btn" data-for="targetRadius" data-dir="up" disabled>▲</button>
+                                <button class="number-btn" data-for="targetRadius" data-dir="down" disabled>▼</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="param-item">
+                        <label for="scale">大きさ</label>
+                        <div class="number-input">
+                            <input type="number" id="scale" min="0.1" step="0.1" value="1.0">
+                            <div class="number-buttons">
+                                <button class="number-btn" data-for="scale" data-dir="up">▲</button>
+                                <button class="number-btn" data-for="scale" data-dir="down">▼</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 右側エディター -->
+        <div class="editor-container">
+            <div class="editor-header">
+                <h2 id="editorTitle">エンティティファイルエディタ</h2>
+                <div class="editor-actions">
+                    <button class="editor-btn edit" id="editBtn">
+                        <span>✏️</span> 編集
+                    </button>
+                    <button class="editor-btn copy" id="copyBtn">
+                        <span>📋</span> コピー
+                    </button>
+                    <button class="editor-btn" id="downloadBtn">
+                        <span>⬇️</span> ダウンロード
+                    </button>
+                </div>
+            </div>
+            
+            <div class="editor-content">
+                <div class="line-numbers" id="lineNumbers"></div>
+                <div id="codeViewer"></div>
+                <textarea id="codeEditor" style="display: none;"></textarea>
+            </div>
+        </div>
+        
+        <!-- 確認モーダル -->
+        <div class="modal-overlay" id="confirmModal">
+            <div class="modal">
+                <h3>⚠️ 変更が保存されていません</h3>
+                <p>ファイルの変更が保存されていません。ページを離れると変更が失われます。</p>
+                <p>ページを離れてもよろしいですか？</p>
+                <div class="modal-buttons">
+                    <button class="modal-btn cancel" id="cancelBtn">キャンセル</button>
+                    <button class="modal-btn confirm" id="confirmBtn">ページを離れる</button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="status" id="status"></div>
+    </div>
+
+    <script>
+        // グローバル変数
+        let entityData = null;
+        let originalFileName = "";
+        let isEditMode = false;
+        let modifiedLines = new Set();
+        let lastModifiedComponent = null;
+        let scrollPositions = new Map();
+        let hasUnsavedChanges = false;
+        let pendingNavigation = null;
+        
+        // DOM要素
+        const dropArea = document.getElementById('dropArea');
+        const fileInput = document.getElementById('fileInput');
+        const fileName = document.getElementById('fileName');
+        const codeViewer = document.getElementById('codeViewer');
+        const codeEditor = document.getElementById('codeEditor');
+        const lineNumbers = document.getElementById('lineNumbers');
+        const editBtn = document.getElementById('editBtn');
+        const copyBtn = document.getElementById('copyBtn');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const editorTitle = document.getElementById('editorTitle');
+        const status = document.getElementById('status');
+        const confirmModal = document.getElementById('confirmModal');
+        const cancelBtn = document.getElementById('cancelBtn');
+        const confirmBtn = document.getElementById('confirmBtn');
+        
+        // パラメータ入力
+        const healthInput = document.getElementById('health');
+        const attackInput = document.getElementById('attack');
+        const targetRadiusInput = document.getElementById('targetRadius');
+        const scaleInput = document.getElementById('scale');
+        
+        // ファイルドロップ/選択の処理
+        dropArea.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', handleFileSelect);
+        
+        // ドラッグ&ドロップイベント
+        dropArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropArea.style.backgroundColor = 'var(--bg-hover)';
+        });
+        
+        dropArea.addEventListener('dragleave', () => {
+            dropArea.style.backgroundColor = '';
+        });
+        
+        dropArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropArea.style.backgroundColor = '';
+            
+            if (e.dataTransfer.files.length) {
+                handleFile(e.dataTransfer.files[0]);
+            }
+        });
+        
+        // ファイル処理関数
+        function handleFileSelect(e) {
+            if (e.target.files.length) {
+                handleFile(e.target.files[0]);
+            }
+        }
+        
+        function handleFile(file) {
+            if (!file.name.endsWith('.json')) {
+                showStatus('JSONファイルのみ対応しています', 'error');
+                return;
+            }
+            
+            // 変更がある場合は確認
+            if (hasUnsavedChanges) {
+                pendingNavigation = () => {
+                    originalFileName = file.name;
+                    fileName.textContent = file.name;
+                    editorTitle.textContent = `エンティティファイルエディタ - ${file.name}`;
+                    
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        try {
+                            entityData = JSON.parse(e.target.result);
+                            updateParameters();
+                            updateCodeView();
+                            hasUnsavedChanges = false;
+                            showStatus('ファイルを読み込みました', 'success');
+                        } catch (err) {
+                            showStatus('JSONの解析に失敗しました', 'error');
+                            console.error(err);
+                        }
+                    };
+                    reader.readAsText(file);
+                };
+                
+                showConfirmModal();
+                return;
+            }
+            
+            originalFileName = file.name;
+            fileName.textContent = file.name;
+            editorTitle.textContent = `エンティティファイルエディタ - ${file.name}`;
+            
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    entityData = JSON.parse(e.target.result);
+                    updateParameters();
+                    updateCodeView();
+                    showStatus('ファイルを読み込みました', 'success');
+                } catch (err) {
+                    showStatus('JSONの解析に失敗しました', 'error');
+                    console.error(err);
+                }
+            };
+            reader.readAsText(file);
+        }
+        
+        // パラメータの更新
+        function updateParameters() {
+            if (!entityData) return;
+            
+            const entity = entityData?.['minecraft:entity'];
+            if (!entity) return;
+            
+            // 体力
+            const health = entity?.components?.['minecraft:health'];
+            if (health) {
+                healthInput.value = health.value;
+                healthInput.disabled = false;
+                document.querySelectorAll('[data-for="health"]').forEach(btn => btn.disabled = false);
+            } else {
+                healthInput.value = '';
+                healthInput.disabled = true;
+                document.querySelectorAll('[data-for="health"]').forEach(btn => btn.disabled = true);
+            }
+            
+            // 攻撃ダメージ
+            const attack = entity?.components?.['minecraft:attack'];
+            if (attack) {
+                attackInput.value = attack.damage;
+                attackInput.disabled = false;
+                document.querySelectorAll('[data-for="attack"]').forEach(btn => btn.disabled = false);
+            } else {
+                attackInput.value = '';
+                attackInput.disabled = true;
+                document.querySelectorAll('[data-for="attack"]').forEach(btn => btn.disabled = true);
+            }
+            
+            // 敵対距離 - minecraft:behavior.nearest_attackable_target がある場合は有効にする
+            const nearestAttackableTarget = entity?.components?.['minecraft:behavior.nearest_attackable_target'];
+            if (nearestAttackableTarget) {
+                // must_see_forget_duration がある場合はその値、ない場合はデフォルト値 17 を設定
+                if (nearestAttackableTarget.must_see_forget_duration !== undefined) {
+                    targetRadiusInput.value = nearestAttackableTarget.must_see_forget_duration;
+                } else {
+                    targetRadiusInput.value = 17; // デフォルト値
+                }
+                targetRadiusInput.disabled = false;
+                document.querySelectorAll('[data-for="targetRadius"]').forEach(btn => btn.disabled = false);
+            } else {
+                targetRadiusInput.value = '';
+                targetRadiusInput.disabled = true;
+                document.querySelectorAll('[data-for="targetRadius"]').forEach(btn => btn.disabled = true);
+            }
+            
+            // 大きさ - minecraft:is_babyがあるグループのscaleは除外
+            const componentGroups = entity?.component_groups;
+            let scaleFound = false;
+            let scaleValue = 1.0;
+            
+            if (componentGroups) {
+                for (const groupName in componentGroups) {
+                    const group = componentGroups[groupName];
+                    // minecraft:is_babyがあるグループはスキップ
+                    if (group['minecraft:is_baby']) {
+                        continue;
+                    }
+                    if (group['minecraft:scale']) {
+                        scaleValue = group['minecraft:scale'].value;
+                        scaleFound = true;
+                        break;
+                    }
+                }
+            }
+            
+            // どこのグループにも適切なscaleがない場合は1.0を表示
+            scaleInput.value = scaleFound ? scaleValue : 1.0;
+        }
+        
+        // パラメータ変更イベント
+        healthInput.addEventListener('input', updateEntityFromParam);
+        attackInput.addEventListener('input', updateEntityFromParam);
+        targetRadiusInput.addEventListener('input', updateEntityFromParam);
+        scaleInput.addEventListener('input', updateEntityFromParam);
+        
+        // 上下ボタン
+        document.querySelectorAll('.number-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const targetId = this.getAttribute('data-for');
+                const direction = this.getAttribute('data-dir');
+                const input = document.getElementById(targetId);
+                
+                if (input.disabled) return;
+                
+                let step = input.step ? parseFloat(input.step) : 1;
+                let value = parseFloat(input.value) || 0;
+                
+                if (direction === 'up') {
+                    value += step;
+                } else {
+                    value -= step;
+                    if (value < parseFloat(input.min || 0)) {
+                        value = parseFloat(input.min || 0);
+                    }
+                }
+                
+                input.value = value;
+                // 直接イベントを発火させる
+                const event = new Event('input', { bubbles: true });
+                input.dispatchEvent(event);
+            });
+        });
+        
+        // パラメータからエンティティを更新
+        function updateEntityFromParam(e) {
+            if (!entityData) return;
+            
+            const input = e.target;
+            const paramName = input.id;
+            const value = input.value;
+            const entity = entityData['minecraft:entity'];
+            
+            // 変更フラグを立てる
+            hasUnsavedChanges = true;
+            
+            // 同じコンポーネントを編集した場合は上にスクロール
+            if (lastModifiedComponent === paramName && scrollPositions.has(paramName)) {
+                const lineNum = scrollPositions.get(paramName);
+                scrollToLine(lineNum);
+            }
+            
+            switch(paramName) {
+                case 'health':
+                    if (entity.components['minecraft:health']) {
+                        entity.components['minecraft:health'].value = parseInt(value);
+                        entity.components['minecraft:health'].max = parseInt(value);
+                        lastModifiedComponent = 'health';
+                        highlightModifiedLine('minecraft:health');
+                    }
+                    break;
+                    
+                case 'attack':
+                    if (entity.components['minecraft:attack']) {
+                        entity.components['minecraft:attack'].damage = parseInt(value);
+                        lastModifiedComponent = 'attack';
+                        highlightModifiedLine('minecraft:attack');
+                    }
+                    break;
+                    
+                case 'targetRadius':
+                    // minecraft:behavior.nearest_attackable_target コンポーネントが存在するか確認
+                    if (!entity.components['minecraft:behavior.nearest_attackable_target']) {
+                        // 存在しない場合は作成（デフォルトのプロパティを含む）
+                        entity.components['minecraft:behavior.nearest_attackable_target'] = {
+                            priority: 2,
+                            must_see: true,
+                            reselect_targets: true,
+                            within_radius: 25,
+                            must_see_forget_duration: 17
+                        };
+                    }
+                    
+                    // must_see_forget_duration プロパティを設定
+                    entity.components['minecraft:behavior.nearest_attackable_target'].must_see_forget_duration = parseInt(value);
+                    lastModifiedComponent = 'targetRadius';
+                    highlightModifiedLine('minecraft:behavior.nearest_attackable_target');
+                    break;
+                    
+                case 'scale':
+                    const componentGroups = entity.component_groups;
+                    let scaleUpdated = false;
+                    
+                    // component_groups内の各グループを探す（minecraft:is_babyがあるグループは除外）
+                    if (componentGroups) {
+                        for (const groupName in componentGroups) {
+                            const group = componentGroups[groupName];
+                            // minecraft:is_babyがあるグループはスキップ
+                            if (group['minecraft:is_baby']) {
+                                continue;
+                            }
+                            
+                            // グループ内にminecraft:scaleがあれば更新
+                            if (group['minecraft:scale']) {
+                                group['minecraft:scale'].value = parseFloat(value);
+                                scaleUpdated = true;
+                                lastModifiedComponent = 'scale';
+                                highlightModifiedLine('minecraft:scale', groupName);
+                                break;
+                            }
+                        }
+                    }
+                    
+                    // 見つからなければ、新しいグループをcomponent_groupsの直下に追加
+                    if (!scaleUpdated) {
+                        // 新しいグループ名を生成（既存のグループ名と重複しないように）
+                        const newGroupName = 'minecraft:scale_group';
+                        if (!componentGroups) {
+                            entity.component_groups = {};
+                        }
+                        // component_groupsの直下に新しいグループを追加
+                        entity.component_groups[newGroupName] = {
+                            'minecraft:scale': { value: parseFloat(value) }
+                        };
+                        lastModifiedComponent = 'scale';
+                        highlightModifiedLine('minecraft:scale', newGroupName);
+                    }
+                    break;
+            }
+            
+            // コードビューを更新
+            updateCodeView();
+        }
+        
+        // 変更行のハイライトと位置記録
+        function highlightModifiedLine(componentType, groupName = null) {
+            const jsonStr = JSON.stringify(entityData, null, 2);
+            const lines = jsonStr.split('\n');
+            let targetLine = -1;
+            
+            // コンポーネントの開始行を探す
+            for (let i = 0; i < lines.length; i++) {
+                if (groupName && lines[i].includes(`"${groupName}"`)) {
+                    // グループ内のscaleを探す
+                    for (let j = i; j < lines.length; j++) {
+                        if (lines[j].includes(`"${componentType}"`)) {
+                            targetLine = j;
+                            break;
+                        }
+                        if (lines[j].includes('}') && lines[j].trim().endsWith('}') && lines[j].indexOf('}') < 3) {
+                            break; // グループの終了
+                        }
+                    }
+                    break;
+                } else if (!groupName && lines[i].includes(`"${componentType}"`)) {
+                    targetLine = i;
+                    break;
+                }
+            }
+            
+            if (targetLine !== -1) {
+                modifiedLines.add(targetLine);
+                scrollPositions.set(lastModifiedComponent, targetLine);
+                scrollToLine(targetLine);
+            }
+        }
+        
+        // 指定行にスクロール
+        function scrollToLine(lineNumber) {
+            setTimeout(() => {
+                const lineElements = codeViewer.querySelectorAll('div');
+                if (lineElements[lineNumber]) {
+                    lineElements[lineNumber].scrollIntoView({ 
+                        behavior: 'smooth', 
+                        block: 'center' 
+                    });
+                }
+            }, 10); // DOM更新を待つ
+        }
+        
+        // コードビューの更新
+        function updateCodeView() {
+            if (!entityData) return;
+            
+            const jsonStr = JSON.stringify(entityData, null, 2);
+            
+            if (isEditMode) {
+                codeEditor.value = jsonStr;
+                // 編集モードでも行番号を更新
+                updateLineNumbers(jsonStr);
+            } else {
+                // シンタックスハイライトを適用
+                codeViewer.innerHTML = syntaxHighlight(jsonStr);
+                
+                // 行番号を更新
+                updateLineNumbers(jsonStr);
+                
+                // 変更行をハイライト
+                highlightModifiedLines();
+            }
+        }
+        
+        // 行番号の更新
+        function updateLineNumbers(jsonStr) {
+            const lines = jsonStr.split('\n').length;
+            let numbersHtml = '';
+            
+            for (let i = 1; i <= lines; i++) {
+                numbersHtml += `<div>${i}</div>`;
+            }
+            
+            lineNumbers.innerHTML = numbersHtml;
+        }
+        
+        // 変更行のハイライト
+        function highlightModifiedLines() {
+            const lines = codeViewer.querySelectorAll('div');
+            lines.forEach((line, index) => {
+                if (modifiedLines.has(index)) {
+                    line.classList.add('line-modified');
+                } else {
+                    line.classList.remove('line-modified');
+                }
+            });
+        }
+        
+        // JSONシンタックスハイライト
+        function syntaxHighlight(json) {
+            json = json.replace(/&/g, '&').replace(/</g, '<').replace(/>/g, '>');
+            
+            return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, (match) => {
+                let cls = 'json-number';
+                
+                if (/^"/.test(match)) {
+                    if (/:$/.test(match)) {
+                        cls = 'json-key';
+                    } else {
+                        cls = 'json-string';
+                    }
+                } else if (/true|false/.test(match)) {
+                    cls = 'json-boolean';
+                } else if (/null/.test(match)) {
+                    cls = 'json-null';
+                }
+                
+                return `<span class="${cls}">${match}</span>`;
+            }).split('\n').map(line => `<div>${line}</div>`).join('');
+        }
+        
+        // 編集モード切り替え
+        editBtn.addEventListener('click', () => {
+            if (!entityData) {
+                showStatus('先にファイルを読み込んでください', 'error');
+                return;
+            }
+            
+            isEditMode = !isEditMode;
+            
+            if (isEditMode) {
+                codeViewer.style.display = 'none';
+                codeEditor.style.display = 'block';
+                editBtn.innerHTML = '<span>💾</span> 保存';
+                codeEditor.value = JSON.stringify(entityData, null, 2);
+                updateLineNumbers(codeEditor.value);
+                // 編集モード時は自動スクロール位置をリセット
+                lastModifiedComponent = null;
+                hasUnsavedChanges = true;
+            } else {
+                try {
+                    entityData = JSON.parse(codeEditor.value);
+                    codeViewer.style.display = 'block';
+                    codeEditor.style.display = 'none';
+                    editBtn.innerHTML = '<span>✏️</span> 編集';
+                    updateParameters();
+                    updateCodeView();
+                    showStatus('変更を保存しました', 'success');
+                } catch (err) {
+                    showStatus('無効なJSONです', 'error');
+                    console.error(err);
+                }
+            }
+        });
+        
+        // コピーボタン
+        copyBtn.addEventListener('click', () => {
+            if (!entityData) {
+                showStatus('先にファイルを読み込んでください', 'error');
+                return;
+            }
+            
+            const jsonStr = JSON.stringify(entityData, null, 2);
+            
+            navigator.clipboard.writeText(jsonStr).then(() => {
+                showStatus('クリップボードにコピーしました', 'success');
+            }).catch(err => {
+                console.error('コピー失敗:', err);
+                showStatus('コピーに失敗しました', 'error');
+            });
+        });
+        
+        // ダウンロードボタン
+        downloadBtn.addEventListener('click', () => {
+            if (!entityData) {
+                showStatus('先にファイルを読み込んでください', 'error');
+                return;
+            }
+            
+            const jsonStr = JSON.stringify(entityData, null, 2);
+            const blob = new Blob([jsonStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            
+            a.href = url;
+            a.download = originalFileName || 'entity.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            showStatus('ファイルをダウンロードしました', 'success');
+            hasUnsavedChanges = false; // ダウンロード後は変更済みフラグをリセット
+        });
+        
+        // 確認モーダル
+        function showConfirmModal() {
+            confirmModal.style.display = 'flex';
+        }
+        
+        function hideConfirmModal() {
+            confirmModal.style.display = 'none';
+            pendingNavigation = null;
+        }
+        
+        cancelBtn.addEventListener('click', hideConfirmModal);
+        
+        confirmBtn.addEventListener('click', () => {
+            hideConfirmModal();
+            if (pendingNavigation) {
+                pendingNavigation();
+            } else {
+                // ページを離れる処理（ブラウザデフォルトの動作に任せる）
+                window.removeEventListener('beforeunload', beforeUnloadHandler);
+                window.location.reload();
+            }
+        });
+        
+        // ページ離脱時の警告
+        function beforeUnloadHandler(e) {
+            if (hasUnsavedChanges) {
+                e.preventDefault();
+                e.returnValue = '変更が保存されていません。ページを離れると変更が失われます。';
+                return e.returnValue;
+            }
+        }
+        
+        window.addEventListener('beforeunload', beforeUnloadHandler);
+        
+        // ステータス表示
+        function showStatus(message, type) {
+            status.textContent = message;
+            status.style.display = 'block';
+            
+            if (type === 'success') {
+                status.style.backgroundColor = '#388a34';
+            } else if (type === 'error') {
+                status.style.backgroundColor = '#c42b1c';
+            }
+            
+            setTimeout(() => {
+                status.style.display = 'none';
+            }, 3000);
+        }
+        
+        // 初期表示
+        updateCodeView();
+        
+        // リンククリックやフォーム送信などのナビゲーションも監視
+        document.addEventListener('click', (e) => {
+            const link = e.target.closest('a');
+            if (link && link.href && link.target !== '_blank' && hasUnsavedChanges) {
+                e.preventDefault();
+                pendingNavigation = () => {
+                    window.removeEventListener('beforeunload', beforeUnloadHandler);
+                    window.location.href = link.href;
+                };
+                showConfirmModal();
+            }
+        });
+        
+        // フォーム送信も監視
+        document.addEventListener('submit', (e) => {
+            if (hasUnsavedChanges) {
+                e.preventDefault();
+                pendingNavigation = () => {
+                    window.removeEventListener('beforeunload', beforeUnloadHandler);
+                    e.target.submit();
+                };
+                showConfirmModal();
+            }
+        });
+    </script>
+</body>
+</html>
