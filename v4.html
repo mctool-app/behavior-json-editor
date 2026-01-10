@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MC Entity Editor Ultimate</title>
+    <style>
+        :root {
+            --bg-color: #1e1e1e;
+            --panel-bg: #252526;
+            --text-color: #d4d4d4;
+            --accent-color: #007acc;
+            --highlight-color: #585816;
+            --border-color: #3e3e42;
+            --pocket-bg: #333333;
+            --input-bg: #3c3c3c;
+            --disabled-color: #555;
+            --disabled-text: #888;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #app {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* --- 左パネル --- */
+        #sidebar {
+            width: 380px;
+            background-color: var(--panel-bg);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            padding: 10px;
+            box-sizing: border-box;
+            overflow-y: auto;
+            flex-shrink: 0;
+        }
+
+        /* ポケット */
+        #pocket {
+            width: 100%;
+            height: 80px;
+            border: 2px dashed #555;
+            border-radius: 8px;
+            background-color: var(--pocket-bg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            margin-bottom: 20px;
+            transition: all 0.3s;
+            text-align: center;
+            font-size: 14px;
+            color: #aaa;
+            flex-shrink: 0;
+        }
+
+        #pocket:hover, #pocket.dragover {
+            border-color: var(--accent-color);
+            color: var(--accent-color);
+            background-color: #2a2d2e;
+        }
+
+        /* コントロールグループ */
+        .control-group {
+            margin-bottom: 12px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #333;
+        }
+        
+        .control-group.disabled {
+            opacity: 0.6;
+        }
+
+        .control-group label {
+            display: flex;
+            justify-content: space-between;
+            font-weight: bold;
+            margin-bottom: 4px;
+            font-size: 13px;
+        }
+
+        .control-group .desc {
+            font-size: 11px;
+            color: #888;
+            margin-bottom: 6px;
+        }
+
+        .status-tag {
+            font-size: 10px;
+            padding: 1px 4px;
+            border-radius: 2px;
+            background: #444;
+            font-weight: normal;
+        }
+        .status-tag.missing { background: #5a3030; color: #ffcccc; }
+        .status-tag.added { background: #305a30; color: #ccffcc; }
+
+        input[type="text"], input[type="number"] {
+            width: 100%;
+            padding: 5px;
+            background-color: var(--input-bg);
+            border: 1px solid #555;
+            color: white;
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-size: 13px;
+        }
+
+        input:disabled {
+            background-color: #2a2a2a;
+            border-color: #444;
+            color: #666;
+            cursor: not-allowed;
+        }
+
+        input:focus {
+            border-color: var(--accent-color);
+            outline: none;
+        }
+
+        /* 座席エディタ */
+        .seat-editor {
+            background: #2d2d2d;
+            border: 1px solid #444;
+            border-radius: 4px;
+            padding: 5px;
+            margin-top: 5px;
+        }
+        .seat-item {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 5px;
+            align-items: center;
+        }
+        .seat-item input {
+            width: 33%;
+            text-align: center;
+        }
+        .seat-label {
+            font-size: 10px;
+            color: #aaa;
+            text-align: center;
+            margin-bottom: 2px;
+        }
+        .btn-mini {
+            background: #444;
+            border: none;
+            color: white;
+            cursor: pointer;
+            border-radius: 3px;
+            padding: 2px 6px;
+            font-size: 12px;
+        }
+        .btn-mini:hover { background: #666; }
+        .btn-mini.danger { background: #843232; }
+        .btn-mini.danger:hover { background: #a44242; }
+        .btn-add { width: 100%; margin-top: 5px; background: #3a5a3a; }
+        
+        /* --- 右パネル: コードビュー --- */
+        #editor-container {
+            flex: 1;
+            position: relative;
+            background-color: #1e1e1e;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #toolbar {
+            height: 40px;
+            background-color: var(--panel-bg);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            padding: 0 10px;
+            justify-content: space-between;
+            flex-shrink: 0;
+        }
+
+        #code-view {
+            flex: 1;
+            padding: 20px;
+            overflow: auto;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 14px;
+            line-height: 1.5;
+            white-space: pre;
+            color: #d4d4d4;
+            tab-size: 4;
+        }
+
+        /* ハイライト */
+        .line { display: block; min-height: 1.5em; }
+        .highlight {
+            background-color: var(--highlight-color);
+            animation: highlightFade 1.5s ease-out;
+        }
+        @keyframes highlightFade {
+            0% { background-color: #888822; }
+            100% { background-color: var(--highlight-color); }
+        }
+
+        /* フッター */
+        footer {
+            height: 30px;
+            background-color: var(--panel-bg);
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            color: #888;
+            flex-shrink: 0;
+            z-index: 10;
+        }
+        footer a { color: var(--accent-color); text-decoration: none; }
+        footer a:hover { text-decoration: underline; }
+
+        /* ボタン */
+        .btn {
+            background-color: var(--accent-color);
+            color: white;
+            border: none;
+            padding: 5px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            margin-left: 10px;
+        }
+        .btn:hover { opacity: 0.9; }
+        .btn.secondary { background-color: #444; }
+        
+        .status-badge {
+            font-size: 12px;
+            padding: 2px 6px;
+            border-radius: 3px;
+            margin-right: 10px;
+            background: #333;
+            color: #aaa;
+        }
+        .status-badge.active { background: #8e3e3e; color: white; }
+
+    </style>
+</head>
+<body>
+
+<div id="app">
+    <div id="sidebar">
+        <div id="pocket" title="クリックまたはドラッグ&ドロップ">
+            📁 ファイルを左上にドロップ<br>
+            <span style="font-size:0.8em">(クリックで選択)</span>
+            <input type="file" id="fileInput" accept=".json" style="display: none;">
+        </div>
+
+        <div id="parameters">
+            <p style="text-align: center; color: #666; margin-top: 50px;">
+                ファイルを読み込むと<br>ここにパラメータが表示されます
+            </p>
+        </div>
+    </div>
+
+    <div id="editor-container">
+        <div id="toolbar">
+            <div>
+                <span id="edit-status" class="status-badge">View Only</span>
+                <span id="filename-display" style="font-size: 12px; color: #888;"></span>
+            </div>
+            <div>
+                <button class="btn secondary" id="toggle-edit-btn">編集モード切替</button>
+                <button class="btn" id="download-btn">JSONを保存</button>
+            </div>
+        </div>
+        <div id="code-view" contenteditable="false">
+            // JSONファイルの内容がここに表示されます...
+        </div>
+    </div>
+</div>
+
+<footer>
+    Provided by&nbsp;<a href="https://example.com" target="_blank">example.com</a>
+</footer>
+
+<script>
+    // --- グローバル変数 ---
+    let currentData = {};
+    let currentFileName = "entity.json";
+    let isEditMode = false;
+
+    // --- パラメータ設定 ---
+    // path: JSON内のアクセスパス (componentsより下は相対パスで探すロジックを入れる)
+    // special: 特別な処理が必要なタイプ (seatsなど)
+    // step: 数値の増減幅
+    const paramConfig = [
+        {
+            id: "identifier",
+            label: "エンティティID",
+            path: "minecraft:entity.description.identifier",
+            type: "text",
+            desc: "ゲーム内での識別ID"
+        },
+        {
+            id: "health",
+            label: "体力 (Health)",
+            path: "minecraft:entity.components.minecraft:health.max", // maxを編集
+            type: "number",
+            step: 1,
+            desc: "最大HP (1ずつ)"
+        },
+        {
+            id: "attack",
+            label: "攻撃力 (Damage)",
+            path: "minecraft:entity.components.minecraft:attack.damage",
+            type: "number",
+            step: 1,
+            desc: "攻撃ダメージ (1ずつ)"
+        },
+        {
+            id: "width",
+            label: "当たり判定: 幅",
+            path: "minecraft:entity.components.minecraft:collision_box.width",
+            type: "number",
+            step: 0.1,
+            desc: "Collision Box Width"
+        },
+        {
+            id: "height",
+            label: "当たり判定: 高さ",
+            path: "minecraft:entity.components.minecraft:collision_box.height",
+            type: "number",
+            step: 0.1,
+            desc: "Collision Box Height"
+        },
+        {
+            id: "scale",
+            label: "大きさ (Scale)",
+            path: "minecraft:entity.components.minecraft:scale.value",
+            type: "number",
+            step: 0.1,
+            allowAdd: true, // 存在しなくても追加可能
+            desc: "モデルのサイズ (大人/基本)。なければ追加します。"
+        },
+        {
+            id: "follow_range",
+            label: "敵対/追跡範囲",
+            path: "minecraft:entity.components.minecraft:follow_range.value",
+            type: "number",
+            step: 1,
+            desc: "敵を見つける距離 (Follow Range)"
+        },
+        {
+            id: "loot",
+            label: "ドロップテーブル",
+            path: "minecraft:entity.components.minecraft:loot.table",
+            type: "text",
+            desc: "Loot Tableのパス"
+        },
+        {
+            id: "burst_shots",
+            label: "連射数 (Blaze等)",
+            path: "minecraft:entity.components.minecraft:behavior.ranged_attack.burst_shots",
+            type: "number",
+            step: 1,
+            desc: "1回の攻撃での発射数"
+        },
+        {
+            id: "burst_interval",
+            label: "攻撃間隔/クールタイム",
+            path: "minecraft:entity.components.minecraft:behavior.ranged_attack.attack_interval", 
+            // note: behaviorによっては burst_interval や charge_time の場合もあるが、代表的なものを指定
+            type: "number",
+            step: 0.1,
+            desc: "攻撃頻度 (秒またはTick)"
+        },
+        {
+            id: "seats",
+            label: "座席位置 (Rideable)",
+            path: "minecraft:entity.components.minecraft:rideable",
+            type: "seats", // カスタムタイプ
+            step: 0.1,
+            desc: "搭乗位置 (XYZ)。複数設定可。"
+        }
+    ];
+
+    // --- DOM要素 ---
+    const pocket = document.getElementById('pocket');
+    const fileInput = document.getElementById('fileInput');
+    const paramsContainer = document.getElementById('parameters');
+    const codeView = document.getElementById('code-view');
+    const toggleEditBtn = document.getElementById('toggle-edit-btn');
+    const editStatus = document.getElementById('edit-status');
+    const downloadBtn = document.getElementById('download-btn');
+    const filenameDisplay = document.getElementById('filename-display');
+
+    // --- イベントリスナー ---
+
+    // DnD & File
+    pocket.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', (e) => loadFile(e.target.files[0]));
+    pocket.addEventListener('dragover', (e) => { e.preventDefault(); pocket.classList.add('dragover'); });
+    pocket.addEventListener('dragleave', () => pocket.classList.remove('dragover'));
+    pocket.addEventListener('drop', (e) => {
+        e.preventDefault();
+        pocket.classList.remove('dragover');
+        if (e.dataTransfer.files.length) loadFile(e.dataTransfer.files[0]);
+    });
+
+    // モード切替
+    toggleEditBtn.addEventListener('click', () => {
+        isEditMode = !isEditMode;
+        codeView.contentEditable = isEditMode;
+        if (isEditMode) {
+            editStatus.textContent = "Editing Code";
+            editStatus.classList.add('active');
+            codeView.style.border = "1px solid #8e3e3e";
+        } else {
+            editStatus.textContent = "View Only";
+            editStatus.classList.remove('active');
+            codeView.style.border = "none";
+            try {
+                currentData = JSON.parse(codeView.innerText);
+                renderControls();
+                renderCode();
+            } catch (e) {
+                alert("JSONエラー: " + e.message);
+                isEditMode = true; codeView.contentEditable = true;
+            }
+        }
+    });
+
+    // ダウンロード
+    downloadBtn.addEventListener('click', () => {
+        if (!currentData || Object.keys(currentData).length === 0) return;
+        const blob = new Blob([JSON.stringify(currentData, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = currentFileName; // アップロード時のファイル名
+        a.click();
+        URL.revokeObjectURL(url);
+    });
+
+    // --- ロジック ---
+
+    function loadFile(file) {
+        if (!file) return;
+        currentFileName = file.name;
+        filenameDisplay.textContent = currentFileName;
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                currentData = JSON.parse(e.target.result);
+                renderControls();
+                renderCode();
+            } catch (err) {
+                alert("読み込み失敗: JSON形式ではありません。");
+            }
+        };
+        reader.readAsText(file);
+    }
+
+    // JSONパスから値を取得
+    function getValueByPath(obj, path) {
+        if(!obj) return undefined;
+        const parts = path.split('.');
+        let current = obj;
+        for (const part of parts) {
+            if (current === undefined || current === null) return undefined;
+            current = current[part];
+        }
+        return current;
+    }
+
+    // JSONパスに値をセット (親がない場合は簡易作成しない、今回は既存チェック済み前提)
+    function setValueByPath(obj, path, value) {
+        const parts = path.split('.');
+        let current = obj;
+        // 親まで移動
+        for (let i = 0; i < parts.length - 1; i++) {
+            const part = parts[i];
+            if (!current[part]) {
+                // scaleなどの自動追加用: 親がなければ作る簡易ロジック
+                // ただし今回はscaleはcomponents直下と仮定
+                current[part] = {}; 
+            }
+            current = current[part];
+        }
+        const lastPart = parts[parts.length - 1];
+        current[lastPart] = value;
+        return true;
+    }
+
+    // Scaleの特別追加処理
+    function createScaleComponent(value) {
+        // minecraft:entity -> components を探す
+        const entity = currentData["minecraft:entity"];
+        if (!entity) return false;
+        if (!entity.components) entity.components = {};
+        
+        entity.components["minecraft:scale"] = { "value": parseFloat(value) };
+        return true;
+    }
+
+    // 左パネル生成
+    function renderControls() {
+        paramsContainer.innerHTML = '';
+        if (Object.keys(currentData).length === 0) return;
+
+        paramConfig.forEach(config => {
+            let val = getValueByPath(currentData, config.path);
+            const exists = (val !== undefined);
+            
+            // 存在せず、かつ追加許可(Scale)でもない場合はグレーアウト
+            const isDisabled = !exists && !config.allowAdd;
+
+            const group = document.createElement('div');
+            group.className = 'control-group' + (isDisabled ? ' disabled' : '');
+
+            // ラベル
+            const label = document.createElement('label');
+            let statusHtml = '';
+            if (isDisabled) statusHtml = '<span class="status-tag missing">なし</span>';
+            else if (!exists && config.allowAdd) statusHtml = '<span class="status-tag added">追加可能</span>';
+            
+            label.innerHTML = `${config.label} ${statusHtml}`;
+            
+            const desc = document.createElement('div');
+            desc.className = 'desc';
+            desc.textContent = config.desc;
+
+            group.appendChild(label);
+            group.appendChild(desc);
+
+            // 入力コントロール
+            if (config.type === 'seats') {
+                // --- 座席エディタ (特殊) ---
+                if (isDisabled) {
+                    const input = document.createElement('input');
+                    input.type = 'text';
+                    input.disabled = true;
+                    input.value = "設定なし";
+                    group.appendChild(input);
+                } else {
+                    const editorDiv = document.createElement('div');
+                    editorDiv.className = 'seat-editor';
+                    
+                    // 現在のseatsデータを取得 (Object か Array)
+                    // Rideableの中身: { "seats": [...] } or { "seats": {...} }
+                    const rideableComp = val; // pathは rideable コンポーネント自体を指している
+                    let seatsData = rideableComp && rideableComp.seats ? rideableComp.seats : [];
+                    
+                    // 配列に統一して処理
+                    if (!Array.isArray(seatsData)) seatsData = [seatsData];
+
+                    // 描画関数
+                    const renderSeatsList = () => {
+                        editorDiv.innerHTML = '<div style="display:flex; font-size:10px; color:#aaa; margin-bottom:2px;"><span style="width:33%;text-align:center">X</span><span style="width:33%;text-align:center">Y</span><span style="width:33%;text-align:center">Z</span><span style="width:20px;"></span></div>';
+                        
+                        seatsData.forEach((seat, idx) => {
+                            const row = document.createElement('div');
+                            row.className = 'seat-item';
+                            
+                            const pos = seat.position || [0, 0, 0];
+
+                            [0, 1, 2].forEach(axis => {
+                                const input = document.createElement('input');
+                                input.type = 'number';
+                                input.step = config.step;
+                                input.value = pos[axis];
+                                input.addEventListener('change', (e) => {
+                                    pos[axis] = parseFloat(e.target.value);
+                                    // データを更新して反映
+                                    seat.position = pos;
+                                    // 元データに書き戻し (Arrayの場合はそのまま、Objectだった場合は構造維持が必要だが、今回はArray化して保存する仕様とする)
+                                    rideableComp.seats = seatsData;
+                                    renderCode(config.path, "seats update");
+                                });
+                                row.appendChild(input);
+                            });
+
+                            const delBtn = document.createElement('button');
+                            delBtn.textContent = '×';
+                            delBtn.className = 'btn-mini danger';
+                            delBtn.title = '削除';
+                            delBtn.onclick = () => {
+                                seatsData.splice(idx, 1);
+                                rideableComp.seats = seatsData;
+                                renderSeatsList();
+                                renderCode(config.path, "seat removed");
+                            };
+                            row.appendChild(delBtn);
+                            editorDiv.appendChild(row);
+                        });
+
+                        const addBtn = document.createElement('button');
+                        addBtn.textContent = '+ 座席を追加';
+                        addBtn.className = 'btn-mini btn-add';
+                        addBtn.onclick = () => {
+                            seatsData.push({ position: [0, 0, 0], lock_rider_rotation: 0 });
+                            rideableComp.seats = seatsData; // コンポーネントに反映
+                            renderSeatsList();
+                            renderCode(config.path, "seat added");
+                        };
+                        editorDiv.appendChild(addBtn);
+                    };
+
+                    renderSeatsList();
+                    group.appendChild(editorDiv);
+                }
+
+            } else {
+                // --- 通常の数値・テキスト ---
+                const input = document.createElement('input');
+                input.type = config.type;
+                if (config.step) input.step = config.step;
+                input.disabled = isDisabled;
+
+                if (!exists && config.allowAdd) {
+                    // 追加可能なパラメータの場合（Scale）
+                    input.placeholder = "値を入力して追加";
+                    input.addEventListener('change', (e) => {
+                        // 新規追加ロジック
+                        if (config.id === 'scale') {
+                            createScaleComponent(e.target.value);
+                            // 再描画して有効化
+                            renderControls(); 
+                            renderCode(config.path, e.target.value);
+                        }
+                    });
+                } else if (exists) {
+                    input.value = val;
+                    input.addEventListener('input', (e) => {
+                        let newVal = e.target.value;
+                        if (config.type === 'number') newVal = parseFloat(newVal);
+                        
+                        setValueByPath(currentData, config.path, newVal);
+                        renderCode(config.path, newVal);
+                    });
+                } else {
+                    input.value = "N/A"; // 存在しないパラメータ
+                }
+                group.appendChild(input);
+            }
+
+            paramsContainer.appendChild(group);
+        });
+    }
+
+    // コードビュー描画とハイライト
+    function renderCode(changedPath = null, changedVal = null) {
+        const jsonStr = JSON.stringify(currentData, null, 2);
+        codeView.innerHTML = '';
+        
+        const lines = jsonStr.split('\n');
+        let targetElem = null;
+
+        // ハイライト検索用の簡易キー抽出
+        let searchKey = "";
+        if (changedPath) {
+            const parts = changedPath.split('.');
+            // パスの最後を取得 (seatsの場合は rideable)
+            searchKey = parts[parts.length - 1]; 
+        }
+
+        lines.forEach(line => {
+            const div = document.createElement('div');
+            div.className = 'line';
+            div.textContent = line;
+
+            // 簡易的なハイライト判定: 行内にキーが含まれていればハイライト
+            // 正確性よりレスポンス重視
+            if (changedPath && line.includes(`"${searchKey}"`)) {
+                div.classList.add('highlight');
+                targetElem = div;
+            }
+            codeView.appendChild(div);
+        });
+
+        if (targetElem) {
+            setTimeout(() => targetElem.scrollIntoView({ block: 'center', behavior: 'smooth' }), 50);
+        }
+    }
+
+</script>
+</body>
+</html>
