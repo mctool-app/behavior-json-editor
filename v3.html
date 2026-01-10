@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MC Entity Editor</title>
+    <style>
+        :root {
+            --bg-color: #1e1e1e;
+            --panel-bg: #252526;
+            --text-color: #d4d4d4;
+            --accent-color: #007acc;
+            --highlight-color: #6a6a18;
+            --border-color: #3e3e42;
+            --pocket-bg: #333333;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            overflow: hidden;
+        }
+
+        #app {
+            display: flex;
+            height: 100vh;
+        }
+
+        /* 左パネル: パラメータ設定 */
+        #sidebar {
+            width: 350px;
+            background-color: var(--panel-bg);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            padding: 10px;
+            box-sizing: border-box;
+            overflow-y: auto;
+        }
+
+        /* ポケット (ファイル入力) */
+        #pocket {
+            width: 100%;
+            height: 80px;
+            border: 2px dashed #555;
+            border-radius: 8px;
+            background-color: var(--pocket-bg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            margin-bottom: 20px;
+            transition: all 0.3s;
+            text-align: center;
+            font-size: 14px;
+            color: #888;
+        }
+
+        #pocket:hover, #pocket.dragover {
+            border-color: var(--accent-color);
+            color: var(--accent-color);
+            background-color: #2a2d2e;
+        }
+
+        /* フォーム要素 */
+        .control-group {
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .control-group label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 5px;
+            font-size: 14px;
+        }
+
+        .control-group .desc {
+            font-size: 11px;
+            color: #888;
+            margin-bottom: 8px;
+        }
+
+        input[type="text"], input[type="number"], select {
+            width: 100%;
+            padding: 6px;
+            background-color: #3c3c3c;
+            border: 1px solid #555;
+            color: white;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+
+        input:focus, select:focus {
+            border-color: var(--accent-color);
+            outline: none;
+        }
+
+        /* 右パネル: コードビュー */
+        #editor-container {
+            flex: 1;
+            position: relative;
+            background-color: #1e1e1e;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #toolbar {
+            height: 40px;
+            background-color: var(--panel-bg);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            padding: 0 10px;
+            justify-content: space-between;
+        }
+
+        #code-view {
+            flex: 1;
+            padding: 20px;
+            overflow: auto;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 14px;
+            line-height: 1.5;
+            white-space: pre;
+            color: #d4d4d4;
+            tab-size: 4;
+        }
+
+        /* ハイライト */
+        .line { display: block; min-height: 1.5em; }
+        .highlight {
+            background-color: var(--highlight-color);
+            animation: flash 1s ease-out;
+        }
+
+        @keyframes flash {
+            0% { background-color: #ffff00; color: black; }
+            100% { background-color: var(--highlight-color); color: #d4d4d4; }
+        }
+
+        /* ボタン */
+        .btn {
+            background-color: var(--accent-color);
+            color: white;
+            border: none;
+            padding: 5px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            margin-left: 10px;
+        }
+        .btn:hover { opacity: 0.9; }
+        .btn.secondary { background-color: #444; }
+        
+        .status-badge {
+            font-size: 12px;
+            padding: 2px 6px;
+            border-radius: 3px;
+            margin-right: 10px;
+            background: #333;
+            color: #aaa;
+        }
+        .status-badge.active {
+            background: #8e3e3e;
+            color: white;
+        }
+
+    </style>
+</head>
+<body>
+
+<div id="app">
+    <div id="sidebar">
+        <div id="pocket" title="クリックまたはドラッグ&ドロップ">
+            📁 ファイルをここにドロップ<br>(またはクリック)
+            <input type="file" id="fileInput" accept=".json" style="display: none;">
+        </div>
+
+        <div id="parameters">
+            <p style="text-align: center; color: #666;">ファイルを読み込むと<br>ここに設定が表示されます</p>
+        </div>
+    </div>
+
+    <div id="editor-container">
+        <div id="toolbar">
+            <div>
+                <span id="edit-status" class="status-badge">View Only</span>
+                <span id="filename-display" style="font-size: 12px; color: #888;"></span>
+            </div>
+            <div>
+                <button class="btn secondary" id="toggle-edit-btn">編集モード切替</button>
+                <button class="btn" id="download-btn">JSONを保存</button>
+            </div>
+        </div>
+        <div id="code-view" contenteditable="false">
+            // ここにJSONコードが表示されます...
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- 初期データと設定 ---
+    let currentData = {};
+    let isEditMode = false;
+    let currentHighlightLine = -1;
+
+    // 編集対象とする主なパラメータの定義
+    // path: JSON内のアクセスパス (.で階層区切り)
+    // label: 表示名
+    // desc: 説明文
+    // type: 入力タイプ (text, number, boolean)
+    const paramConfig = [
+        {
+            id: "identifier",
+            label: "エンティティID",
+            path: "minecraft:entity.description.identifier",
+            type: "text",
+            desc: "ゲーム内での識別名 (例: myname:entity)"
+        },
+        {
+            id: "health",
+            label: "体力 (HP)",
+            path: "minecraft:entity.components.minecraft:health.value",
+            type: "number",
+            desc: "エンティティの最大体力"
+        },
+        {
+            id: "attack",
+            label: "攻撃力",
+            path: "minecraft:entity.components.minecraft:attack.damage",
+            type: "number",
+            desc: "プレイヤーに与えるダメージ量"
+        },
+        {
+            id: "scale",
+            label: "大きさ (Scale)",
+            // コンポーネントグループ内にある場合が多いが、基本設定にあればここ
+            path: "minecraft:entity.components.minecraft:scale.value", 
+            type: "number",
+            desc: "見た目の大きさの倍率"
+        },
+        {
+            id: "width",
+            label: "当たり判定 (幅)",
+            path: "minecraft:entity.components.minecraft:collision_box.width",
+            type: "number",
+            desc: "衝突判定の幅"
+        },
+        {
+            id: "height",
+            label: "当たり判定 (高さ)",
+            path: "minecraft:entity.components.minecraft:collision_box.height",
+            type: "number",
+            desc: "衝突判定の高さ"
+        },
+        {
+            id: "movement",
+            label: "移動速度",
+            path: "minecraft:entity.components.minecraft:movement.value",
+            type: "number",
+            desc: "歩行時の基本移動速度"
+        },
+        {
+            id: "family",
+            label: "種族 (Family)",
+            path: "minecraft:entity.components.minecraft:type_family.family",
+            type: "array", // 簡易的にテキストでカンマ区切り表示にする
+            desc: "所属するファミリー (カンマ区切り)"
+        },
+        {
+            id: "loot",
+            label: "ドロップテーブル",
+            path: "minecraft:entity.components.minecraft:loot.table",
+            type: "text",
+            desc: "倒した時に落とすアイテムの設定ファイルパス"
+        }
+    ];
+
+    // --- DOM要素 ---
+    const pocket = document.getElementById('pocket');
+    const fileInput = document.getElementById('fileInput');
+    const paramsContainer = document.getElementById('parameters');
+    const codeView = document.getElementById('code-view');
+    const toggleEditBtn = document.getElementById('toggle-edit-btn');
+    const editStatus = document.getElementById('edit-status');
+    const downloadBtn = document.getElementById('download-btn');
+
+    // --- イベントリスナー ---
+
+    // ドラッグ＆ドロップ
+    pocket.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', (e) => loadFile(e.target.files[0]));
+
+    pocket.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        pocket.classList.add('dragover');
+    });
+    pocket.addEventListener('dragleave', () => pocket.classList.remove('dragover'));
+    pocket.addEventListener('drop', (e) => {
+        e.preventDefault();
+        pocket.classList.remove('dragover');
+        if (e.dataTransfer.files.length > 0) {
+            loadFile(e.dataTransfer.files[0]);
+        }
+    });
+
+    // 編集モード切替
+    toggleEditBtn.addEventListener('click', () => {
+        isEditMode = !isEditMode;
+        codeView.contentEditable = isEditMode;
+        if (isEditMode) {
+            editStatus.textContent = "Editing Code";
+            editStatus.classList.add('active');
+            codeView.style.border = "1px solid #8e3e3e";
+        } else {
+            editStatus.textContent = "View Only";
+            editStatus.classList.remove('active');
+            codeView.style.border = "none";
+            // コード編集から戻った時にJSONパースを試みる
+            try {
+                const text = codeView.innerText;
+                currentData = JSON.parse(text);
+                renderControls();
+                renderCode(); // 整形しなおし
+            } catch (e) {
+                alert("JSON形式が正しくありません。修正してください。");
+                isEditMode = true; // 戻す
+                codeView.contentEditable = true;
+            }
+        }
+    });
+
+    // ダウンロード
+    downloadBtn.addEventListener('click', () => {
+        if (!currentData) return;
+        const blob = new Blob([JSON.stringify(currentData, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'entity.json';
+        a.click();
+        URL.revokeObjectURL(url);
+    });
+
+    // --- ロジック ---
+
+    function loadFile(file) {
+        if (!file) return;
+        document.getElementById('filename-display').textContent = file.name;
+        
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                currentData = JSON.parse(e.target.result);
+                renderControls();
+                renderCode();
+            } catch (err) {
+                alert("JSONファイルの読み込みに失敗しました。\n" + err);
+            }
+        };
+        reader.readAsText(file);
+    }
+
+    // JSONパスから値を取得するヘルパー
+    function getValueByPath(obj, path) {
+        const parts = path.split('.');
+        let current = obj;
+        for (const part of parts) {
+            if (current === undefined || current === null) return undefined;
+            current = current[part];
+        }
+        return current;
+    }
+
+    // JSONパスに値をセットするヘルパー (親が存在しない場合は作成しない簡易版)
+    function setValueByPath(obj, path, value) {
+        const parts = path.split('.');
+        let current = obj;
+        for (let i = 0; i < parts.length - 1; i++) {
+            const part = parts[i];
+            if (!current[part]) {
+                // パスが存在しない場合、パラメータ変更時は何もしないか、構造を作るか
+                // ここでは簡易的に「既存の構造がある場合のみ変更」とする
+                // もし構造を作りたい場合は current[part] = {} を追加
+                return false; 
+            }
+            current = current[part];
+        }
+        const lastPart = parts[parts.length - 1];
+        
+        // 配列変換 (カンマ区切りテキストの場合)
+        if (Array.isArray(current[lastPart]) && typeof value === 'string') {
+             current[lastPart] = value.split(',').map(s => s.trim());
+        } else {
+             current[lastPart] = value;
+        }
+        return true;
+    }
+
+    // 左パネルのコントロール生成
+    function renderControls() {
+        paramsContainer.innerHTML = '';
+        
+        paramConfig.forEach(config => {
+            const val = getValueByPath(currentData, config.path);
+            
+            // 値が存在しない場合はスキップ（または追加ボタンを表示などの実装もあり）
+            if (val === undefined) return;
+
+            const div = document.createElement('div');
+            div.className = 'control-group';
+
+            const label = document.createElement('label');
+            label.textContent = config.label;
+            
+            const desc = document.createElement('div');
+            desc.className = 'desc';
+            desc.textContent = config.desc;
+
+            let input;
+            if (config.type === 'array') {
+                input = document.createElement('input');
+                input.type = 'text';
+                input.value = Array.isArray(val) ? val.join(', ') : val;
+            } else if (config.type === 'number') {
+                input = document.createElement('input');
+                input.type = 'number';
+                input.step = "0.01";
+                input.value = val;
+            } else {
+                input = document.createElement('input');
+                input.type = 'text';
+                input.value = val;
+            }
+
+            input.addEventListener('input', (e) => {
+                let newValue = e.target.value;
+                if (config.type === 'number') newValue = parseFloat(newValue);
+                
+                const success = setValueByPath(currentData, config.path, newValue);
+                if (success) {
+                    renderCode(config.path, newValue);
+                }
+            });
+
+            div.appendChild(label);
+            div.appendChild(desc);
+            div.appendChild(input);
+            paramsContainer.appendChild(div);
+        });
+
+        if (paramsContainer.innerHTML === '') {
+            paramsContainer.innerHTML = '<p style="padding:10px; color:#aaa;">編集可能なパラメータが見つかりませんでした。<br>構造が標準的なEntity JSONと異なる可能性があります。</p>';
+        }
+    }
+
+    // 右パネルのコード描画とハイライト処理
+    function renderCode(changedPath = null, changedValue = null) {
+        // JSONを文字列化
+        const jsonString = JSON.stringify(currentData, null, 2);
+        
+        // 単純なテキストとして設定するのではなく、行ごとに分割してspanに入れる
+        // これにより行ごとの制御（スクロール、ハイライト）が可能になる
+        codeView.innerHTML = '';
+        
+        const lines = jsonString.split('\n');
+        let targetElement = null;
+
+        // ハイライトすべき行を探すための単純なロジック
+        // パスの最後のキー（例: "value"）と、設定した値が含まれる行を探す
+        // 注意: 同じ値が複数ある場合、最初のものにヒットする可能性があるが、
+        // 簡易実装として、変更した直後のレンダリングでは「キー」と「値」の両方が含まれる行を優先する
+        let searchKey = "";
+        let searchValStr = "";
+        
+        if (changedPath) {
+            const parts = changedPath.split('.');
+            searchKey = parts[parts.length - 1]; // 例: "value"
+            searchValStr = String(changedValue);
+        }
+
+        lines.forEach((lineText, index) => {
+            const div = document.createElement('div');
+            div.className = 'line';
+            div.textContent = lineText; // テキストとして安全に挿入
+            
+            // ハイライト判定
+            if (changedPath) {
+                // 行の中に "キー": ... 値 ... が含まれているか簡易チェック
+                // 完全なパーサーではないため誤検知の可能性はあるが、使用感としては十分
+                if (lineText.includes(`"${searchKey}"`) && lineText.includes(searchValStr)) {
+                    // 以前のハイライトを消す (全再描画なので自動で消える)
+                    div.classList.add('highlight');
+                    targetElement = div;
+                }
+            }
+
+            codeView.appendChild(div);
+        });
+
+        // スクロール処理
+        if (targetElement) {
+            // 少し遅らせてDOM描画を待つ必要はないが、スムーズな見た目のために
+            setTimeout(() => {
+                targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 50);
+        }
+    }
+
+    // 初期表示
+    renderCode();
+
+</script>
+</body>
+</html>
