@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MC Entity Editor Advanced</title>
+    <style>
+        :root {
+            --bg-color: #1e1e1e;
+            --panel-bg: #252526;
+            --text-color: #d4d4d4;
+            --accent-color: #007acc;
+            --highlight-color: #585816;
+            --border-color: #3e3e42;
+            --pocket-bg: #333333;
+            --input-bg: #3c3c3c;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #app {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* --- 左パネル --- */
+        #sidebar {
+            width: 380px;
+            background-color: var(--panel-bg);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            padding: 10px;
+            box-sizing: border-box;
+            overflow-y: auto;
+            flex-shrink: 0;
+        }
+
+        /* ポケット */
+        #pocket {
+            width: 100%;
+            height: 80px;
+            border: 2px dashed #555;
+            border-radius: 8px;
+            background-color: var(--pocket-bg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            margin-bottom: 20px;
+            transition: all 0.3s;
+            text-align: center;
+            font-size: 14px;
+            color: #aaa;
+            flex-shrink: 0;
+        }
+
+        #pocket:hover, #pocket.dragover {
+            border-color: var(--accent-color);
+            color: var(--accent-color);
+            background-color: #2a2d2e;
+        }
+
+        /* コントロール */
+        .control-group {
+            margin-bottom: 12px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #333;
+        }
+        
+        .control-group.disabled {
+            opacity: 0.5;
+            pointer-events: none; /* 編集不可にする */
+        }
+
+        .control-group label {
+            display: flex;
+            justify-content: space-between;
+            font-weight: bold;
+            margin-bottom: 4px;
+            font-size: 13px;
+        }
+
+        .control-group .desc {
+            font-size: 11px;
+            color: #888;
+            margin-bottom: 6px;
+        }
+
+        .status-tag {
+            font-size: 10px;
+            padding: 1px 4px;
+            border-radius: 2px;
+            background: #444;
+            font-weight: normal;
+        }
+        .status-tag.missing { background: #5a3030; color: #ffcccc; }
+        .status-tag.found { background: #305a5a; color: #ccffff; }
+        .status-tag.added { background: #305a30; color: #ccffcc; }
+
+        input[type="text"], input[type="number"] {
+            width: 100%;
+            padding: 5px;
+            background-color: var(--input-bg);
+            border: 1px solid #555;
+            color: white;
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-size: 13px;
+        }
+
+        input:focus { border-color: var(--accent-color); outline: none; }
+
+        /* 座席エディタ */
+        .seat-editor {
+            background: #2d2d2d;
+            border: 1px solid #444;
+            border-radius: 4px;
+            padding: 5px;
+            margin-top: 5px;
+        }
+        .seat-item { display: flex; gap: 5px; margin-bottom: 5px; align-items: center; }
+        .seat-item input { width: 33%; text-align: center; }
+        .btn-mini {
+            background: #444; border: none; color: white; cursor: pointer;
+            border-radius: 3px; padding: 2px 6px; font-size: 12px;
+        }
+        .btn-mini:hover { background: #666; }
+        .btn-mini.danger { background: #843232; }
+        .btn-add { width: 100%; margin-top: 5px; background: #3a5a3a; }
+
+        /* --- 右パネル --- */
+        #editor-container {
+            flex: 1;
+            position: relative;
+            background-color: #1e1e1e;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #toolbar {
+            height: 40px;
+            background-color: var(--panel-bg);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            padding: 0 10px;
+            justify-content: space-between;
+            flex-shrink: 0;
+        }
+
+        #code-view {
+            flex: 1;
+            padding: 20px;
+            overflow: auto;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 14px;
+            line-height: 1.5;
+            white-space: pre;
+            color: #d4d4d4;
+            tab-size: 4;
+        }
+
+        .line { display: block; min-height: 1.5em; }
+        .highlight {
+            background-color: var(--highlight-color);
+            animation: highlightFade 1.5s ease-out;
+        }
+        @keyframes highlightFade {
+            0% { background-color: #888822; }
+            100% { background-color: var(--highlight-color); }
+        }
+
+        footer {
+            height: 30px;
+            background-color: var(--panel-bg);
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            color: #888;
+            flex-shrink: 0;
+            z-index: 10;
+        }
+        footer a { color: var(--accent-color); text-decoration: none; }
+        footer a:hover { text-decoration: underline; }
+
+        .btn {
+            background-color: var(--accent-color); color: white; border: none;
+            padding: 5px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; margin-left: 10px;
+        }
+        .btn:hover { opacity: 0.9; }
+        .btn.secondary { background-color: #444; }
+        
+        .status-badge {
+            font-size: 12px; padding: 2px 6px; border-radius: 3px; margin-right: 10px;
+            background: #333; color: #aaa;
+        }
+        .status-badge.active { background: #8e3e3e; color: white; }
+
+    </style>
+</head>
+<body>
+
+<div id="app">
+    <div id="sidebar">
+        <div id="pocket" title="クリックまたはドラッグ&ドロップ">
+            📁 ファイルをここにドロップ<br>
+            <span style="font-size:0.8em">(クリックで選択)</span>
+            <input type="file" id="fileInput" accept=".json" style="display: none;">
+        </div>
+        <div id="parameters">
+            <p style="text-align: center; color: #666; margin-top: 50px;">
+                ファイルを読み込むと<br>ここにパラメータが表示されます
+            </p>
+        </div>
+    </div>
+
+    <div id="editor-container">
+        <div id="toolbar">
+            <div>
+                <span id="edit-status" class="status-badge">View Only</span>
+                <span id="filename-display" style="font-size: 12px; color: #888;"></span>
+            </div>
+            <div>
+                <button class="btn secondary" id="toggle-edit-btn">編集モード切替</button>
+                <button class="btn" id="download-btn">JSONを保存</button>
+            </div>
+        </div>
+        <div id="code-view" contenteditable="false">
+            // JSONファイルの内容がここに表示されます...
+        </div>
+    </div>
+</div>
+
+<footer>
+    Provided by&nbsp;<a href="https://example.com" target="_blank">example.com</a>
+</footer>
+
+<script>
+    // --- グローバル変数 ---
+    let currentData = {};
+    let currentFileName = "entity.json";
+    let isEditMode = false;
+
+    // --- 設定: パラメータ定義 ---
+    const paramConfig = [
+        {
+            id: "identifier",
+            label: "エンティティID",
+            desc: "ゲーム内での識別ID",
+            type: "direct_path",
+            path: "minecraft:entity.description.identifier",
+            inputType: "text"
+        },
+        {
+            id: "health",
+            label: "体力 (Health)",
+            desc: "最大HP (1ずつ)",
+            type: "component",
+            component: "minecraft:health",
+            key: "max", // valueの場合もあるがmax推奨
+            inputType: "number",
+            step: 1
+        },
+        {
+            id: "attack",
+            label: "攻撃力 (Damage)",
+            desc: "攻撃ダメージ (1ずつ)",
+            type: "component",
+            component: "minecraft:attack",
+            key: "damage",
+            inputType: "number",
+            step: 1
+        },
+        {
+            id: "width",
+            label: "当たり判定: 幅",
+            desc: "Collision Box Width",
+            type: "component",
+            component: "minecraft:collision_box",
+            key: "width",
+            inputType: "number",
+            step: 0.1
+        },
+        {
+            id: "height",
+            label: "当たり判定: 高さ",
+            desc: "Collision Box Height",
+            type: "component",
+            component: "minecraft:collision_box",
+            key: "height",
+            inputType: "number",
+            step: 0.1
+        },
+        {
+            id: "scale",
+            label: "大きさ (Scale)",
+            desc: "モデルのサイズ (大人)。なければ追加。",
+            type: "component_force_add", // なければ追加する特殊タイプ
+            component: "minecraft:scale",
+            key: "value",
+            inputType: "number",
+            step: 0.1
+        },
+        {
+            id: "nearest_target",
+            label: "敵対範囲 (Radius)",
+            desc: "変更時 max_dist = 値+10 に自動更新",
+            type: "custom_behavior_range", // カスタムロジック
+            component: "minecraft:behavior.nearest_attackable_target",
+            key: "within_radius",
+            inputType: "number",
+            step: 1
+        },
+        {
+            id: "melee_cooldown",
+            label: "攻撃間隔 (Melee)",
+            desc: "クールタイム (秒)。なければ追加。",
+            type: "custom_behavior_melee", // カスタムロジック
+            component: "minecraft:behavior.melee_attack",
+            key: "cooldown_time",
+            inputType: "number",
+            step: 0.1
+        },
+        {
+            id: "burst_shots",
+            label: "連射数 (Blaze等)",
+            desc: "Range Attack burst shots",
+            type: "component",
+            component: "minecraft:behavior.ranged_attack",
+            key: "burst_shots",
+            inputType: "number",
+            step: 1
+        },
+        {
+            id: "loot",
+            label: "ドロップテーブル",
+            desc: "Loot Table Path",
+            type: "component",
+            component: "minecraft:loot",
+            key: "table",
+            inputType: "text"
+        },
+        {
+            id: "seats",
+            label: "座席位置 (Rideable)",
+            desc: "搭乗位置 (XYZ)",
+            type: "custom_seats",
+            component: "minecraft:rideable",
+            inputType: "seats",
+            step: 0.1
+        }
+    ];
+
+    // --- DOM要素 ---
+    const pocket = document.getElementById('pocket');
+    const fileInput = document.getElementById('fileInput');
+    const paramsContainer = document.getElementById('parameters');
+    const codeView = document.getElementById('code-view');
+    const toggleEditBtn = document.getElementById('toggle-edit-btn');
+    const editStatus = document.getElementById('edit-status');
+    const downloadBtn = document.getElementById('download-btn');
+    const filenameDisplay = document.getElementById('filename-display');
+
+    // --- イベントリスナー ---
+    pocket.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', (e) => loadFile(e.target.files[0]));
+    pocket.addEventListener('dragover', (e) => { e.preventDefault(); pocket.classList.add('dragover'); });
+    pocket.addEventListener('dragleave', () => pocket.classList.remove('dragover'));
+    pocket.addEventListener('drop', (e) => {
+        e.preventDefault();
+        pocket.classList.remove('dragover');
+        if (e.dataTransfer.files.length) loadFile(e.dataTransfer.files[0]);
+    });
+
+    toggleEditBtn.addEventListener('click', () => {
+        isEditMode = !isEditMode;
+        codeView.contentEditable = isEditMode;
+        if (isEditMode) {
+            editStatus.textContent = "Editing Code";
+            editStatus.classList.add('active');
+            codeView.style.border = "1px solid #8e3e3e";
+        } else {
+            editStatus.textContent = "View Only";
+            editStatus.classList.remove('active');
+            codeView.style.border = "none";
+            try {
+                currentData = JSON.parse(codeView.innerText);
+                renderControls();
+                renderCode();
+            } catch (e) {
+                alert("JSONパースエラー: " + e.message);
+                isEditMode = true; codeView.contentEditable = true;
+            }
+        }
+    });
+
+    downloadBtn.addEventListener('click', () => {
+        if (!currentData || Object.keys(currentData).length === 0) return;
+        const blob = new Blob([JSON.stringify(currentData, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = currentFileName;
+        a.click();
+        URL.revokeObjectURL(url);
+    });
+
+    // --- ロジック ---
+
+    function loadFile(file) {
+        if (!file) return;
+        currentFileName = file.name;
+        filenameDisplay.textContent = currentFileName;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                currentData = JSON.parse(e.target.result);
+                renderControls();
+                renderCode();
+            } catch (err) {
+                alert("読み込み失敗: " + err);
+            }
+        };
+        reader.readAsText(file);
+    }
+
+    // 再帰的にオブジェクトを走査して max_dist を全て更新する
+    function recursiveUpdateMaxDist(obj, newVal) {
+        if (typeof obj !== 'object' || obj === null) return;
+        
+        for (const key in obj) {
+            if (key === 'max_dist') {
+                obj[key] = newVal;
+            } else {
+                recursiveUpdateMaxDist(obj[key], newVal);
+            }
+        }
+    }
+
+    // JSON内から指定コンポーネントを持つ全オブジェクトを探す（Groups含む）
+    function findAllComponents(data, componentName) {
+        let results = [];
+        const entity = data["minecraft:entity"];
+        if (!entity) return results;
+
+        // 1. メイン components
+        if (entity.components && entity.components[componentName]) {
+            results.push(entity.components[componentName]);
+        }
+
+        // 2. Component Groups
+        if (entity.component_groups) {
+            for (const groupName in entity.component_groups) {
+                const group = entity.component_groups[groupName];
+                if (group[componentName]) {
+                    results.push(group[componentName]);
+                }
+            }
+        }
+        return results;
+    }
+
+    // コントロール描画
+    function renderControls() {
+        paramsContainer.innerHTML = '';
+        if (Object.keys(currentData).length === 0) return;
+
+        paramConfig.forEach(config => {
+            const group = document.createElement('div');
+            
+            // --- 値の取得ロジック ---
+            let value = undefined;
+            let componentsFound = [];
+            let isFound = false;
+
+            if (config.type === 'direct_path') {
+                // パス指定
+                value = getValueByPath(currentData, config.path);
+                isFound = (value !== undefined);
+            } else {
+                // コンポーネント検索 (Groups含む)
+                componentsFound = findAllComponents(currentData, config.component);
+                isFound = (componentsFound.length > 0);
+                if (isFound) {
+                    // 表示用には最初に見つかったものの値を使う
+                    value = componentsFound[0][config.key];
+                    // 値がない場合（パラメータ追加用）
+                    if (value === undefined && config.type === 'custom_behavior_melee') {
+                        value = "未設定"; // 表示用
+                    }
+                }
+            }
+
+            // --- 状態判定 (Scaleは特例) ---
+            let isDisabled = !isFound;
+            if (config.type === 'component_force_add') isDisabled = false; // 強制追加可能
+
+            group.className = 'control-group' + (isDisabled ? ' disabled' : '');
+
+            // ラベル
+            const label = document.createElement('label');
+            let statusBadge = '';
+            if (!isFound) {
+                if(config.type === 'component_force_add') statusBadge = '<span class="status-tag added">追加可能</span>';
+                else statusBadge = '<span class="status-tag missing">なし</span>';
+            } else if (componentsFound.length > 1) {
+                statusBadge = '<span class="status-tag found">複数箇所</span>';
+            }
+            label.innerHTML = `${config.label} ${statusBadge}`;
+            
+            const desc = document.createElement('div');
+            desc.className = 'desc';
+            desc.textContent = config.desc;
+
+            group.appendChild(label);
+            group.appendChild(desc);
+
+            // --- 入力フィールド生成 ---
+            
+            // 特殊: 座席エディタ
+            if (config.type === 'custom_seats') {
+                if (isDisabled) {
+                    const input = document.createElement('input'); input.disabled = true; input.value = "コンポーネントなし";
+                    group.appendChild(input);
+                } else {
+                    const editorDiv = document.createElement('div');
+                    editorDiv.className = 'seat-editor';
+                    
+                    // すべてのRideableコンポーネントを更新対象にする
+                    // ただしUIは「最初に見つかったもの」をベースにする（複雑化回避のため）
+                    const mainComp = componentsFound[0];
+                    let seatsData = mainComp.seats ? (Array.isArray(mainComp.seats) ? mainComp.seats : [mainComp.seats]) : [];
+
+                    const renderSeats = () => {
+                        editorDiv.innerHTML = '<div style="display:flex; font-size:10px; color:#aaa; margin-bottom:2px;"><span style="width:33%;text-align:center">X</span><span style="width:33%;text-align:center">Y</span><span style="width:33%;text-align:center">Z</span><span style="width:20px;"></span></div>';
+                        seatsData.forEach((seat, idx) => {
+                            const row = document.createElement('div');
+                            row.className = 'seat-item';
+                            const pos = seat.position || [0,0,0];
+                            [0,1,2].forEach(axis => {
+                                const input = document.createElement('input');
+                                input.type = 'number'; input.step = 0.1; input.value = pos[axis];
+                                input.addEventListener('change', (e) => {
+                                    pos[axis] = parseFloat(e.target.value);
+                                    seat.position = pos;
+                                    // 複数箇所のRideableを一括更新
+                                    componentsFound.forEach(c => {
+                                        // 構造をコピーして適用
+                                        c.seats = JSON.parse(JSON.stringify(seatsData));
+                                    });
+                                    renderCode("minecraft:rideable", "seats");
+                                });
+                                row.appendChild(input);
+                            });
+                            const delBtn = document.createElement('button');
+                            delBtn.textContent = '×'; delBtn.className = 'btn-mini danger';
+                            delBtn.onclick = () => {
+                                seatsData.splice(idx, 1);
+                                componentsFound.forEach(c => c.seats = JSON.parse(JSON.stringify(seatsData)));
+                                renderSeats();
+                                renderCode("minecraft:rideable", "seats");
+                            };
+                            row.appendChild(delBtn);
+                            editorDiv.appendChild(row);
+                        });
+                        const addBtn = document.createElement('button');
+                        addBtn.textContent = '+ 座席を追加'; addBtn.className = 'btn-mini btn-add';
+                        addBtn.onclick = () => {
+                            seatsData.push({ position: [0,0,0] });
+                            componentsFound.forEach(c => c.seats = JSON.parse(JSON.stringify(seatsData)));
+                            renderSeats();
+                            renderCode("minecraft:rideable", "seats");
+                        };
+                        editorDiv.appendChild(addBtn);
+                    };
+                    renderSeats();
+                    group.appendChild(editorDiv);
+                }
+            } 
+            // 通常: テキスト/数値
+            else {
+                const input = document.createElement('input');
+                input.type = config.inputType;
+                if (config.step) input.step = config.step;
+                input.disabled = isDisabled;
+
+                // 初期値設定
+                if (!isDisabled) {
+                    input.value = (value !== undefined) ? value : "";
+                    if (config.type === 'custom_behavior_melee' && value === "未設定") {
+                        input.placeholder = "値を入力して追加";
+                        input.value = "";
+                    }
+                } else if (config.type === 'component_force_add') {
+                    input.placeholder = "値を入力して追加";
+                } else {
+                    input.value = "N/A";
+                }
+
+                // 入力イベント
+                input.addEventListener('change', (e) => {
+                    let val = e.target.value;
+                    if (config.inputType === 'number') val = parseFloat(val);
+
+                    // --- 更新ロジック分岐 ---
+                    
+                    if (config.type === 'direct_path') {
+                        setValueByPath(currentData, config.path, val);
+                        renderCode(config.id, val); // idをマーカーキーにする
+                    } 
+                    else if (config.type === 'component_force_add') {
+                        // Scaleがない場合 components に追加
+                        let entity = currentData["minecraft:entity"];
+                        if(!entity.components) entity.components = {};
+                        entity.components[config.component] = { [config.key]: val };
+                        renderControls(); // ステータス更新のため再描画
+                        renderCode(config.key, val);
+                    }
+                    else if (config.type === 'custom_behavior_range') {
+                        // 敵対範囲: within_radius + max_dist連動
+                        componentsFound.forEach(comp => {
+                            comp[config.key] = val; // within_radius
+                            // max_dist を再帰的に探して更新
+                            recursiveUpdateMaxDist(comp, val + 10);
+                        });
+                        // マーキングは within_radius のみ
+                        renderCode(config.key, val);
+                    }
+                    else if (config.type === 'custom_behavior_melee') {
+                        // 攻撃間隔: パラメータなければ追加
+                        componentsFound.forEach(comp => {
+                            comp[config.key] = val;
+                        });
+                        renderCode(config.key, val);
+                    }
+                    else {
+                        // 通常コンポーネント更新 (全箇所)
+                        componentsFound.forEach(comp => {
+                            comp[config.key] = val;
+                        });
+                        renderCode(config.key, val);
+                    }
+                });
+                group.appendChild(input);
+            }
+
+            paramsContainer.appendChild(group);
+        });
+    }
+
+    // パスヘルパー
+    function getValueByPath(obj, path) {
+        if (!obj) return undefined;
+        const parts = path.split('.');
+        let current = obj;
+        for (const p of parts) {
+            if (current === undefined || current === null) return undefined;
+            current = current[p];
+        }
+        return current;
+    }
+    
+    function setValueByPath(obj, path, val) {
+        const parts = path.split('.');
+        let current = obj;
+        for (let i=0; i<parts.length-1; i++) {
+            current = current[parts[i]];
+        }
+        current[parts[parts.length-1]] = val;
+    }
+
+    // コード描画 & ハイライト
+    function renderCode(highlightKey = null, highlightVal = null) {
+        const jsonStr = JSON.stringify(currentData, null, 2);
+        codeView.innerHTML = '';
+        const lines = jsonStr.split('\n');
+        
+        let targetElement = null;
+        
+        // ハイライト検索用の文字列準備
+        let searchKeyStr = highlightKey ? `"${highlightKey}"` : null;
+        // idがpathの場合は末尾をとる
+        if (searchKeyStr && searchKeyStr.includes('.')) {
+            const parts = highlightKey.split('.');
+            searchKeyStr = `"${parts[parts.length-1]}"`;
+        }
+
+        lines.forEach(line => {
+            const div = document.createElement('div');
+            div.className = 'line';
+            div.textContent = line;
+            
+            if (searchKeyStr && line.includes(searchKeyStr)) {
+                // 値も一致するか簡易チェック (完全一致は難しいが、変更した値が含まれていれば確度高い)
+                if (highlightVal !== null && line.includes(String(highlightVal))) {
+                    div.classList.add('highlight');
+                    targetElement = div;
+                } 
+                // 値判定なし（削除や構造変更時）
+                else if (highlightVal === "seats" || highlightVal === null) {
+                    div.classList.add('highlight');
+                    targetElement = div;
+                }
+            }
+            codeView.appendChild(div);
+        });
+
+        if (targetElement) {
+            setTimeout(() => targetElement.scrollIntoView({block:'center', behavior:'smooth'}), 50);
+        }
+    }
+
+</script>
+</body>
+</html>
